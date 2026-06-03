@@ -4,7 +4,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 import pandas as pd
-from tqdm import tqdm
 
 load_dotenv()
 
@@ -15,9 +14,8 @@ if not os.getenv("DEEPSEEK_API_KEY"):
     sys.exit(1)
 
 from loader import load_excel
-from feature_engine import calculate_market_features
-from market_agent import analyze_keyword
-from scoring_engine import calculate_opportunity_score
+from market_agent import batch_analyze_keywords
+from scoring_engine import batch_compute_market_features, batch_compute_opportunity_scores
 from ranking_engine import build_rankings
 from report_engine import export_results
 
@@ -44,57 +42,47 @@ def main():
         print(f"[错误] 数据缺少必要列: {missing}")
         return
 
-    results = []
+    # ============================================================
+    # 第一步：批量计算市场特征（纯向量化运算，毫秒级完成）
+    # ============================================================
+    print("[2/5] 批量计算市场特征...")
+    market_features = batch_compute_market_features(df)
+    print(f"  -> 市场特征计算完成（{len(market_features)} 条）")
+    print(f"  -> demand_score 范围: {market_features['demand_score'].min():.1f} - {market_features['demand_score'].max():.1f}")
 
-    print("[2/5] 开始分析关键词...")
-    for _, row in tqdm(df.iterrows(), total=len(df), desc="分析进度"):
-        keyword = row["搜索查询"]
+    # ============================================================
+    # 第二步：批量 AI 分析（所有关键词打包成 1 次 DeepSeek API 调用）
+    # ============================================================
+    print("[3/5] 批量 AI 分析（DeepSeek）...")
+    ai_results = batch_analyze_keywords(df)
+    print(f"  -> AI 分析完成（{len(ai_results)} 条）")
 
-        try:
-            # 1. 基于市场数据的量化特征
-            features = calculate_market_features(row)
+    # 检查是否有分析失败的
+    failed = ai_results[ai_results["recommendation"] == "分析失败"]
+    if not failed.empty:
+        print(f"  ⚠️  有 {len(failed)} 条关键词分析失败，已使用默认值")
 
-            # 2. AI 分析（DeepSeek）
-            ai = analyze_keyword(keyword, row)
+    # ============================================================
+    # 第三步：统一计算机会评分（纯向量化运算）
+    # ============================================================
+    print("[4/5] 计算综合机会评分...")
+    opportunity_scores = batch_compute_opportunity_scores(market_features, ai_results)
+    print(f"  -> 机会评分完成")
+    print(f"  -> opportunity_score 范围: {opportunity_scores.min():.1f} - {opportunity_scores.max():.1f}")
 
-            # 3. 综合机会评分
-            opportunity = calculate_opportunity_score(
-                demand=features["demand_score"],
-                cross_border=ai.get("cross_border_score", 0),
-                profit=ai.get("profit_score", 0),
-                competition=ai.get("competition_score", 0),
-            )
+    # 组装最终 DataFrame
+    result_df = pd.concat([
+        df,
+        market_features,
+        ai_results,
+        opportunity_scores.rename("opportunity_score"),
+    ], axis=1)
 
-            results.append({
-                **row.to_dict(),
-                **features,
-                **ai,
-                "opportunity_score": opportunity,
-            })
-
-        except Exception as e:
-            print(f"\n  [警告] 关键词 '{keyword}' 分析失败: {e}")
-            results.append({
-                **row.to_dict(),
-                "demand_score": 0,
-                "cross_border_score": 0,
-                "profit_score": 0,
-                "competition_score": 0,
-                "logistics_risk": 0,
-                "after_sales_risk": 0,
-                "recommendation": "",
-                "reason": f"分析异常: {e}",
-                "opportunity_score": 0,
-            })
-
-    result_df = pd.DataFrame(results)
-
-    # 4. 构建排名榜单
-    print("[4/5] 生成排名榜单...")
+    # ============================================================
+    # 第四步：构建排名并导出
+    # ============================================================
+    print("[5/5] 生成排名榜单并导出结果...")
     rankings = build_rankings(result_df)
-
-    # 5. 导出结果
-    print("[5/5] 导出结果...")
     export_results(result_df, rankings)
 
     print("\n全部完成！")
