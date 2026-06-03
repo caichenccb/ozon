@@ -1,0 +1,6 @@
+# Ozon 关键词机会分析系统依赖
+openai>=1.0.0          # DeepSeek API 调用（兼容 OpenAI SDK）
+pandas>=1.5.0          # 数据处理
+openpyxl>=3.0.0        # Excel 读写
+python-dotenv>=1.0.0   # 环境变量管理
+tqdm>=4.60.0           # 进度条
