@@ -4,3 +4,5 @@ pandas>=1.5.0          # 数据处理
 openpyxl>=3.0.0        # Excel 读写
 python-dotenv>=1.0.0   # 环境变量管理
 tqdm>=4.60.0           # 进度条
+Pillow>=10.0.0         # 图片处理（product_scorer.py 使用）
+

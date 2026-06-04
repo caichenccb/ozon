@@ -20,14 +20,14 @@ load_dotenv()
 
 client = OpenAI(
     api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url="https://api.deepseek.com"
+    base_url="https://api.deepseek.com/v4"
 )
 
 # 卖家约束（从 config.py 同步，避免循环依赖）
 SELLER_PROFILE = """
 - 中国跨境卖家，从中国直发
 - 物流时效 15-30 天
-- 不做低价商品（客单价 >= 2000 卢布）
+- 不做低价商品（客单价 >= 300 卢布）
 - 不做高退货率品类
 - 希望高利润率
 - 希望低市场竞争
@@ -145,7 +145,7 @@ JSON 的 key 是每个关键词原文，value 是分析结果对象：
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
-                model="deepseek-chat",
+                model="deepseek-v4-pro",
                 messages=[
                     {
                         "role": "system",
@@ -254,7 +254,7 @@ def analyze_keyword(keyword: str, row) -> dict:
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
-                model="deepseek-chat",
+                model="deepseek-v4-pro",
                 messages=[
                     {
                         "role": "system",
